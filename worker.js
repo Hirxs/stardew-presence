@@ -113,8 +113,8 @@ export default {
       }
     }
 
-    // 4. GET /i/:id - Serve image from R2 with edge caching
-    if (request.method === "GET" && url.pathname.startsWith("/i/")) {
+    // 4. GET or HEAD /i/:id - Serve image from R2 with edge caching
+    if ((request.method === "GET" || request.method === "HEAD") && url.pathname.startsWith("/i/")) {
       const key = url.pathname.slice(3);
       if (!key) {
         return new Response("Not found", { status: 404 });
@@ -134,6 +134,10 @@ export default {
       headers.set("etag", object.httpEtag);
       headers.set("Cache-Control", "public, max-age=31536000, immutable");
       headers.set("Access-Control-Allow-Origin", "*");
+
+      if (request.method === "HEAD") {
+        return new Response(null, { headers });
+      }
 
       return new Response(object.body, { headers });
     }
