@@ -1,0 +1,28 @@
+## Build and output directories
+**/bin/
+**/obj/
+bin/
+obj/
+
+## Cloudflare / Node / Web
+.wrangler/
+.cloudflare/
+node_modules/
+dist/
+
+## Visual Studio / IDE files
+.vs/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+## Distribution artifacts
+*.zip
+current_farmer.png
+
+## System files
+.DS_Store
+Thumbs.db
+

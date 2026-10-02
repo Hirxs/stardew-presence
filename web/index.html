@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stardew Presence • Avatar CDN & API</title>
+  <meta name="description" content="Fast, privacy-friendly Cloudflare R2 image host for Stardew Presence Discord Rich Presence dynamic portraits.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="background-glow top-left"></div>
+  <div class="background-glow bottom-right"></div>
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <div class="brand">
+        <span class="brand-icon">🌱</span>
+        <div class="brand-text">
+          <span class="brand-title">Stardew Presence</span>
+          <span class="brand-subtitle">Cloudflare Host & CDN</span>
+        </div>
+      </div>
+      <div class="header-status">
+        <span id="status-pill" class="status-pill checking">
+          <span class="status-dot"></span>
+          <span id="status-text">Checking API...</span>
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <main class="container main-content">
+    <!-- Hero Section -->
+    <section class="hero-section">
+      <div class="badge">Discord Rich Presence • Stardew Valley</div>
+      <h1 class="hero-title">Dynamic Farmer Avatar Hosting</h1>
+      <p class="hero-description">
+        Lightweight image backend powered by Cloudflare Pages & R2. Delivers instant, edge-cached character portraits to Discord without tracking, telemetry, or bandwidth costs.
+      </p>
+    </section>
+
+    <!-- Quick Setup Card -->
+    <section class="card config-card">
+      <div class="card-header">
+        <div class="card-title-group">
+          <span class="card-icon">⚡</span>
+          <h2>Mod Configuration</h2>
+        </div>
+        <button id="copy-config-btn" class="btn btn-secondary btn-sm">
+          <span class="icon">📋</span> Copy Config
+        </button>
+      </div>
+      <p class="card-desc">
+        Add or update these fields in your Stardew Valley <code class="inline-code">config.json</code> (or configure directly in-game using Generic Mod Config Menu):
+      </p>
+      <div class="code-box">
+        <pre><code id="config-code-block" class="language-json">{
+  "EnableDynamicFarmerImage": true,
+  "CustomUploadUrl": "https://your-domain.pages.dev/api/upload"
+}</code></pre>
+      </div>
+    </section>
+
+    <!-- Interactive Test Upload Section -->
+    <section class="card test-card">
+      <div class="card-header">
+        <div class="card-title-group">
+          <span class="card-icon">🧪</span>
+          <h2>Interactive Upload Tester</h2>
+        </div>
+        <span class="tag">Edge Test</span>
+      </div>
+      <p class="card-desc">
+        Test your Cloudflare Pages deployment and R2 bucket connection right here by dropping an image:
+      </p>
+
+      <div id="drop-zone" class="drop-zone">
+        <input type="file" id="file-input" accept="image/png,image/jpeg,image/webp" class="file-input-hidden">
+        <div class="drop-zone-content">
+          <div class="drop-zone-icon">🖼️</div>
+          <p class="drop-zone-title">Drag & drop a character sprite or click to browse</p>
+          <span class="drop-zone-sub">PNG, JPEG, WebP (Max 5 MB)</span>
+        </div>
+      </div>
+
+      <div id="upload-result" class="upload-result hidden">
+        <div class="preview-container">
+          <div class="preview-box">
+            <img id="preview-img" src="" alt="Uploaded character portrait preview" class="pixel-art-preview">
+          </div>
+          <div class="result-details">
+            <div class="result-row">
+              <span class="label">Public URL:</span>
+              <div class="url-copy-group">
+                <input type="text" id="result-url-input" readonly class="input-readonly">
+                <button id="copy-url-btn" class="btn btn-secondary btn-sm">Copy</button>
+              </div>
+            </div>
+            <div class="result-row stats-row">
+              <span><strong>File:</strong> <span id="result-filename">-</span></span>
+              <span><strong>Size:</strong> <span id="result-size">-</span></span>
+              <span><strong>Status:</strong> <span class="badge-success">Cached in R2</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="upload-status-message" class="status-msg hidden"></div>
+    </section>
+
+    <!-- Setup Guide -->
+    <section class="card guide-card">
+      <div class="card-header">
+        <div class="card-title-group">
+          <span class="card-icon">🚀</span>
+          <h2>How to Deploy via GitHub to Cloudflare Pages</h2>
+        </div>
+      </div>
+      <div class="steps-grid">
+        <div class="step-item">
+          <div class="step-number">1</div>
+          <h3>Push to GitHub</h3>
+          <p>Push this repository to your GitHub account (public or private).</p>
+        </div>
+        <div class="step-item">
+          <div class="step-number">2</div>
+          <h3>Connect to Pages</h3>
+          <p>In Cloudflare Dashboard, go to <strong>Workers & Pages</strong> &rarr; <strong>Create application</strong> &rarr; <strong>Pages</strong> &rarr; <strong>Connect to Git</strong>. Select this repo and set Build output directory to <code>web</code>.</p>
+        </div>
+        <div class="step-item">
+          <div class="step-number">3</div>
+          <h3>Bind R2 Bucket</h3>
+          <p>Under project <strong>Settings</strong> &rarr; <strong>Functions</strong> &rarr; <strong>R2 bucket bindings</strong>, add variable <code>BUCKET</code> mapped to your bucket.</p>
+        </div>
+        <div class="step-item">
+          <div class="step-number">4</div>
+          <h3>Plug into Mod</h3>
+          <p>Copy your Pages URL (e.g. <code>https://your-site.pages.dev/api/upload</code>) into the mod's configuration.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Privacy & NexusMods Compliance Section -->
+    <section class="card privacy-card">
+      <div class="card-header">
+        <div class="card-title-group">
+          <span class="card-icon">🛡️</span>
+          <h2>Privacy & Transparency Guarantee</h2>
+        </div>
+        <span class="badge-pill">NexusMods Safe</span>
+      </div>
+      <div class="privacy-content">
+        <ul class="privacy-list">
+          <li><strong>Zero Telemetry:</strong> No analytics, tracking tokens, user identifiers, or game telemetry are ever transmitted or stored.</li>
+          <li><strong>Image Data Only:</strong> The endpoint strictly receives rendered 192x192 PNG character avatars for Discord Rich Presence display.</li>
+          <li><strong>Offline Resilient:</strong> If the user is offline or has no internet connection, the mod gracefully defaults to the standard game logo without any errors or delays.</li>
+          <li><strong>Deterministic Deduplication:</strong> Images are hashed using SHA-256 to eliminate duplicate uploads and minimize storage.</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <p>Stardew Presence • Made for Stardew Valley & Discord RPC</p>
+      <div class="footer-links">
+        <a href="https://github.com/Hirxs/Stardew-Presence" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://www.nexusmods.com/stardewvalley/mods/51515" target="_blank" rel="noopener">Nexus Mods</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

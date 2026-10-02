@@ -1,0 +1,8 @@
+name = "sv-presence"
+compatibility_date = "2024-01-01"
+pages_build_output_dir = "web"
+
+# Cloudflare R2 bucket binding for storing dynamic farmer portrait images
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "sv-presence-portraits"
