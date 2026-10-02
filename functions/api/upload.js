@@ -26,27 +26,39 @@ export async function onRequestPost(context) {
     const contentType = request.headers.get("content-type") || "";
 
     if (contentType.includes("multipart/form-data")) {
-      const formData = await request.formData();
-      const file = formData.get("file") || formData.get("image");
-      if (!file || typeof file === "string") {
-        return new Response(JSON.stringify({ error: "Missing 'file' field in form submission." }), {
-          status: 400,
-          headers: corsHeaders
-        });
-      }
-      imageBytes = await file.arrayBuffer();
-    } else if (contentType.includes("image/png") || contentType.includes("application/octet-stream")) {
-      imageBytes = await request.arrayBuffer();
-    } else {
       try {
         const formData = await request.formData();
         const file = formData.get("file") || formData.get("image");
         if (file && typeof file !== "string") {
           imageBytes = await file.arrayBuffer();
         }
-      } catch {
-        imageBytes = await request.arrayBuffer();
+      } catch (e) {
+        const raw = await request.arrayBuffer();
+        const bytes = new Uint8Array(raw);
+        const pngHeader = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+        let start = -1;
+        for (let i = 0; i <= bytes.length - 8; i++) {
+          if (pngHeader.every((b, idx) => bytes[i + idx] === b)) {
+            start = i;
+            break;
+          }
+        }
+        if (start !== -1) {
+          const iend = [0x49, 0x45, 0x4e, 0x44];
+          let end = bytes.length;
+          for (let i = start; i <= bytes.length - 8; i++) {
+            if (iend.every((b, idx) => bytes[i + idx] === b)) {
+              end = i + 8;
+              break;
+            }
+          }
+          imageBytes = raw.slice(start, end);
+        }
       }
+    } else if (contentType.includes("image/png") || contentType.includes("application/octet-stream")) {
+      imageBytes = await request.arrayBuffer();
+    } else {
+      imageBytes = await request.arrayBuffer();
     }
 
     if (!imageBytes || imageBytes.byteLength === 0) {

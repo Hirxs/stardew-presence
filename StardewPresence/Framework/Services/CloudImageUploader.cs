@@ -61,11 +61,10 @@ namespace StardewPresence.Framework.Services
                     }
                 }
 
-                using var content = new MultipartFormDataContent();
-                var imageContent = new ByteArrayContent(pngBytes);
-                imageContent.Headers.ContentType = new MediaTypeHeaderValue("image/png");
-                content.Add(imageContent, "file", "image.png");
+                request.Headers.UserAgent.ParseAdd("StardewPresence/0.2.0");
 
+                using var content = new ByteArrayContent(pngBytes);
+                content.Headers.ContentType = new MediaTypeHeaderValue("image/png");
                 request.Content = content;
 
                 using HttpResponseMessage response = await HttpClient.SendAsync(request);
