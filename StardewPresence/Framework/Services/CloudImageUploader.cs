@@ -73,7 +73,7 @@ namespace StardewPresence.Framework.Services
                 if (!response.IsSuccessStatusCode)
                 {
                     string errorMessage = TryExtractErrorMessage(responseBody) ?? response.ReasonPhrase ?? "Unknown error";
-                    ModLogger.LogTrace(this.monitor, $"[ImageUploader] Upload failed (HTTP {(int)response.StatusCode}): {errorMessage}");
+                    ModLogger.LogWarn(this.monitor, $"[ImageUploader] Upload failed (HTTP {(int)response.StatusCode}): {errorMessage}");
                     return null;
                 }
 
@@ -110,23 +110,23 @@ namespace StardewPresence.Framework.Services
                     }
                 }
 
-                ModLogger.LogTrace(this.monitor, $"[ImageUploader] Response missing url: {responseBody}");
+                ModLogger.LogWarn(this.monitor, $"[ImageUploader] Response missing url: {responseBody}");
                 return null;
             }
             catch (TaskCanceledException)
             {
-                ModLogger.LogTrace(this.monitor, "[ImageUploader] Request timed out.");
+                ModLogger.LogWarn(this.monitor, "[ImageUploader] Request timed out connecting to upload API.");
                 return null;
             }
             catch (HttpRequestException ex)
             {
                 // Offline or network unreachable - fallback to default logo
-                ModLogger.LogTrace(this.monitor, $"[ImageUploader] Offline / unreachable: {ex.Message}");
+                ModLogger.LogWarn(this.monitor, $"[ImageUploader] Offline or network unreachable: {ex.Message}");
                 return null;
             }
             catch (Exception ex)
             {
-                ModLogger.LogTrace(this.monitor, $"[ImageUploader] Upload exception: {ex.Message}");
+                ModLogger.LogError(this.monitor, $"[ImageUploader] Upload exception: {ex.Message}");
                 return null;
             }
         }

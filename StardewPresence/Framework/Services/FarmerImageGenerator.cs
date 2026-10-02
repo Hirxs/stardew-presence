@@ -118,7 +118,7 @@ namespace StardewPresence.Framework.Services
                     }
                     catch (Exception ex)
                     {
-                        ModLogger.LogTrace(monitor, $"[StardewPresence] Could not upload dynamic image: {ex.Message}");
+                        ModLogger.LogWarn(monitor, $"[StardewPresence] Could not upload dynamic image: {ex.Message}");
                     }
                     finally
                     {
@@ -128,7 +128,7 @@ namespace StardewPresence.Framework.Services
             }
             catch (Exception ex)
             {
-                ModLogger.LogTrace(monitor, $"[StardewPresence] Render error: {ex.Message}");
+                ModLogger.LogWarn(monitor, $"[StardewPresence] Render error: {ex.Message}");
             }
         }
 

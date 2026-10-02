@@ -285,7 +285,7 @@ namespace StardewPresence.Framework.Clients
             };
 
             string json = JsonSerializer.Serialize(payload, options);
-            logger($"[DiscordRPC] Sent SET_ACTIVITY to Discord: {activity?.Details ?? "null"} | {activity?.State ?? "null"}", true);
+            logger($"[DiscordRPC] Sent SET_ACTIVITY: {activity?.Details ?? "null"} | {activity?.State ?? "null"} (Image: {activity?.Assets?.LargeImage ?? "none"})", true);
             await SendFrameAsync(DiscordOpCode.Frame, json);
         }
 
