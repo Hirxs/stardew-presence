@@ -63,7 +63,7 @@ This repository includes a Cloudflare Pages site and API (`web/` and `functions/
    - **Build output directory**: `web`
 4. Under project **Settings** &rarr; **Functions** &rarr; **R2 bucket bindings**, add:
    - Variable name: `BUCKET`
-   - R2 bucket: Select your bucket (e.g. `sv-presence-portraits`)
+   - R2 bucket: Select your bucket (`stardew-presence`)
 5. In Stardew Valley `config.json` (or GMCM in-game), configure:
    ```json
    {

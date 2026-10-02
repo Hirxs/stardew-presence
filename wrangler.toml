@@ -10,4 +10,4 @@ binding = "ASSETS"
 # R2 bucket binding for storing dynamic character avatars
 [[r2_buckets]]
 binding = "BUCKET"
-bucket_name = "sv-presence-portraits"
+bucket_name = "stardew-presence"
