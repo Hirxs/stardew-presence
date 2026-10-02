@@ -237,5 +237,79 @@ namespace StardewPresence.Framework.Presence
 
             return helper.Translation.Get("weather.sunny");
         }
+
+        public static string FormatCustomLine(string template, Farmer? farmer, ModConfig config, IModHelper helper, int modCount, string? defaultPosition = null)
+        {
+            if (string.IsNullOrWhiteSpace(template)) return string.Empty;
+
+            return System.Text.RegularExpressions.Regex.Replace(template, @"[\{\[\(]([a-zA-Z0-9_]+)[\}\]\)]", match =>
+            {
+                string key = match.Groups[1].Value.ToLowerInvariant();
+                return key switch
+                {
+                    "position" or "location" => !string.IsNullOrWhiteSpace(defaultPosition)
+                        ? defaultPosition
+                        : (Game1.currentLocation != null ? LocationResolver.GetFriendlyLocationName(Game1.currentLocation, helper, config) : "Stardew Valley"),
+                    "farmname" or "farm" or "farm_name" => farmer?.farmName?.Value ?? "Farm",
+                    "player" or "farmer" or "name" => farmer?.Name ?? "Farmer",
+                    "money" => farmer != null ? $"{farmer.Money:N0}g" : "0g",
+                    "date" => GetFormattedDate(helper),
+                    "season" => GetSeasonDisplayName(helper),
+                    "day" => Game1.dayOfMonth.ToString(),
+                    "year" => Game1.year.ToString(),
+                    "time" => Game1.getTimeOfDayString(Game1.timeOfDay),
+                    "weather" => GetWeatherDisplayName(helper),
+                    "spouse" or "companion" => GetSpouseDisplayName(farmer),
+                    "pet" => GetPetDisplayName(farmer),
+                    "health" => farmer != null ? $"{farmer.health}/{farmer.maxHealth}" : "100/100",
+                    "energy" or "stamina" => farmer != null ? $"{(int)farmer.stamina}/{farmer.maxStamina.Value}" : "270/270",
+                    "mods" or "modcount" => modCount > 0 ? modCount.ToString() : "0",
+                    "qicoins" => farmer != null ? $"{farmer.clubCoins:N0}" : "0",
+                    "qigems" => farmer != null ? $"{farmer.QiGems:N0}" : "0",
+                    _ => match.Value
+                };
+            });
+        }
+
+        public static string GetSeasonDisplayName(IModHelper helper)
+        {
+            string seasonKey = Game1.currentSeason?.ToLowerInvariant() ?? "spring";
+            string seasonName = helper.Translation.Get($"season.{seasonKey}");
+            if (string.IsNullOrWhiteSpace(seasonName) || seasonName.StartsWith("["))
+            {
+                seasonName = char.ToUpperInvariant(seasonKey[0]) + seasonKey.Substring(1);
+            }
+            return seasonName;
+        }
+
+        public static string GetFormattedDate(IModHelper helper)
+        {
+            string season = GetSeasonDisplayName(helper);
+            string locale = helper.Translation.Locale?.ToLowerInvariant() ?? "";
+            if (locale.StartsWith("es"))
+            {
+                return $"{season} {Game1.dayOfMonth}, Año {Game1.year}";
+            }
+            return $"{season} {Game1.dayOfMonth}, Year {Game1.year}";
+        }
+
+        public static string GetSpouseDisplayName(Farmer? farmer)
+        {
+            if (farmer == null || string.IsNullOrWhiteSpace(farmer.spouse)) return "Single";
+            var npc = Game1.getCharacterFromName(farmer.spouse);
+            return npc?.displayName ?? farmer.spouse;
+        }
+
+        public static string GetPetDisplayName(Farmer? farmer)
+        {
+            var pet = farmer?.getPet();
+            if (pet != null)
+            {
+                return !string.IsNullOrWhiteSpace(pet.displayName)
+                    ? pet.displayName
+                    : (!string.IsNullOrWhiteSpace(pet.Name) ? pet.Name : "Pet");
+            }
+            return "Pet";
+        }
     }
 }

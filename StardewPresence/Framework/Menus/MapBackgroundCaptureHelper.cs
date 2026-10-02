@@ -254,7 +254,7 @@ namespace StardewPresence.Framework.Menus
                     finalTarget.SaveAsPng(fs, targetResolution, targetResolution);
                 }
 
-                ModLogger.LogInfo(monitor, $"[StardewPresence] Custom background snapshot saved for season '{currentSeason}' at ({tileX},{tileY}) in '{location.NameOrUniqueName}'");
+                ModLogger.LogTrace(monitor, $"[StardewPresence] Custom background snapshot saved for season '{currentSeason}' at ({tileX},{tileY}) in '{location.NameOrUniqueName}'");
 
                 config.UseCustomMapBackground = true;
                 config.CustomMapLocation = location.NameOrUniqueName;
@@ -263,6 +263,7 @@ namespace StardewPresence.Framework.Menus
                 config.CustomMapGridSize = gridSize;
                 config.LastBackgroundCaptureTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                 helper.WriteConfig(config);
+                ConfigFileFormatter.RestoreComments(helper.DirectoryPath);
 
                 imageGenerator.InvalidateCache();
 

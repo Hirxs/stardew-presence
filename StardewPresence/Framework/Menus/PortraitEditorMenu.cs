@@ -17,6 +17,7 @@ namespace StardewPresence.Framework.Menus
     {
         private readonly IModHelper helper;
         private readonly IMonitor monitor;
+        private readonly IManifest manifest;
         private readonly ModConfig liveConfig;
         private readonly ModConfig config;
         private readonly FarmerImageGenerator imageGenerator;
@@ -32,10 +33,13 @@ namespace StardewPresence.Framework.Menus
         // UI Components
         private Rectangle previewRect;
         private ClickableComponent btnBgSelect = null!;
+        private ClickableComponent btnImageFrame = null!;
         private ClickableComponent btnEmote = null!;
         private ClickableComponent btnSettings = null!;
 
         private ClickableComponent tabFarmer = null!;
+        private TextBox imageFrameUrlBox = null!;
+        private bool imageFrameUrlFocused;
         private ClickableComponent tabSpouse = null!;
         private ClickableComponent tabPet = null!;
 
@@ -74,6 +78,11 @@ namespace StardewPresence.Framework.Menus
         private static readonly Rectangle YellowButtonSourceRect = new Rectangle(432, 439, 9, 9);
         private static readonly Rectangle CheckboxUncheckedRect = new Rectangle(227, 425, 9, 9);
         private static readonly Rectangle CheckboxCheckedRect   = new Rectangle(236, 425, 9, 9);
+        private static readonly string[] ImageFrameOptions =
+        {
+            "none", "wooden", "wooden_black", "wooden_blue", "wooden_gray", "wooden_green",
+            "wooden_mythic_purple", "wooden_pink", "wooden_purple", "wooden_red", "wooden_yellow", "url"
+        };
 
         private (NPC? npc, Farmer? spouseFarmer) cachedSpouse;
         private NPC? cachedPet;
@@ -81,6 +90,7 @@ namespace StardewPresence.Framework.Menus
         public PortraitEditorMenu(
             IModHelper helper,
             IMonitor monitor,
+            IManifest manifest,
             ModConfig config,
             FarmerImageGenerator imageGenerator,
             Action onConfigSaved)
@@ -88,6 +98,7 @@ namespace StardewPresence.Framework.Menus
         {
             this.helper = helper;
             this.monitor = monitor;
+            this.manifest = manifest;
             this.liveConfig = config;
             this.config = config.Clone();
             this.imageGenerator = imageGenerator;
@@ -228,6 +239,30 @@ namespace StardewPresence.Framework.Menus
 
             int emoteGap = Layout.EmoteButtonOffsetY != 0 ? Layout.EmoteButtonOffsetY : 6;
             currentLeftY += emoteGap;
+            btnImageFrame = new ClickableComponent(
+                new Rectangle(previewRect.X, currentLeftY, previewRect.Width, Layout.EmoteButtonHeight), "image_frame");
+            currentLeftY += Layout.EmoteButtonHeight;
+
+            if (imageFrameUrlBox == null)
+            {
+                var boxTex = Game1.content.Load<Texture2D>("LooseSprites\\textBox");
+                imageFrameUrlBox = new TextBox(boxTex, null, Game1.smallFont, Game1.textColor)
+                {
+                    limitWidth = false,
+                    textLimit = 500,
+                    Text = config.ImageFrameUrl ?? ""
+                };
+            }
+
+            if (string.Equals(config.ImageFrame, "url", StringComparison.OrdinalIgnoreCase))
+            {
+                imageFrameUrlBox.X = previewRect.X;
+                imageFrameUrlBox.Y = currentLeftY + 4;
+                imageFrameUrlBox.Width = previewRect.Width;
+                currentLeftY += 48;
+            }
+
+            currentLeftY += emoteGap;
             btnEmote = new ClickableComponent(
                 new Rectangle(previewRect.X, currentLeftY, previewRect.Width, Layout.EmoteButtonHeight), "emote");
             currentLeftY += Layout.EmoteButtonHeight;
@@ -246,39 +281,34 @@ namespace StardewPresence.Framework.Menus
             bool hasPet = cachedPet?.Sprite?.Texture != null;
 
             int totalTabWidth = Layout.TabButtonWidth * 2 + Layout.TabGap;
+            int tabGap = (hasSpouse && hasPet) ? Layout.TabGap3 : Layout.TabGap;
+            int tabCount = 1 + (hasSpouse ? 1 : 0) + (hasPet ? 1 : 0);
+            int tabW = (totalTabWidth - (tabGap * (tabCount - 1))) / tabCount;
 
-            if (hasSpouse && hasPet)
+
+            int curTabX = rx;
+            tabFarmer = new ClickableComponent(new Rectangle(curTabX, tabY, tabW, Layout.TabButtonHeight), "tab_farmer");
+            curTabX += tabW + tabGap;
+
+            if (hasSpouse)
             {
-                int gap = Layout.TabGap3 > 0 ? Layout.TabGap3 : 14;
-                int tabW = (totalTabWidth - (gap * 2)) / 3;
-                tabFarmer = new ClickableComponent(new Rectangle(rx, tabY, tabW, Layout.TabButtonHeight), "tab_farmer");
-                tabSpouse = new ClickableComponent(new Rectangle(rx + tabW + gap, tabY, tabW, Layout.TabButtonHeight), "tab_spouse");
-                tabPet    = new ClickableComponent(new Rectangle(rx + (tabW + gap) * 2, tabY, tabW, Layout.TabButtonHeight), "tab_pet");
-            }
-            else if (hasSpouse && !hasPet)
-            {
-                int tabW = Layout.TabButtonWidth;
-                int gap = Layout.TabGap;
-                tabFarmer = new ClickableComponent(new Rectangle(rx, tabY, tabW, Layout.TabButtonHeight), "tab_farmer");
-                tabSpouse = new ClickableComponent(new Rectangle(rx + tabW + gap, tabY, tabW, Layout.TabButtonHeight), "tab_spouse");
-                tabPet    = new ClickableComponent(new Rectangle(0, 0, 0, 0), "tab_pet");
-                if (selectedTarget == 2) selectedTarget = 0;
-            }
-            else if (!hasSpouse && hasPet)
-            {
-                int tabW = Layout.TabButtonWidth;
-                int gap = Layout.TabGap;
-                tabFarmer = new ClickableComponent(new Rectangle(rx, tabY, tabW, Layout.TabButtonHeight), "tab_farmer");
-                tabSpouse = new ClickableComponent(new Rectangle(0, 0, 0, 0), "tab_spouse");
-                tabPet    = new ClickableComponent(new Rectangle(rx + tabW + gap, tabY, tabW, Layout.TabButtonHeight), "tab_pet");
-                if (selectedTarget == 1) selectedTarget = 0;
+                tabSpouse = new ClickableComponent(new Rectangle(curTabX, tabY, tabW, Layout.TabButtonHeight), "tab_spouse");
+                curTabX += tabW + tabGap;
             }
             else
             {
-                selectedTarget = 0;
-                tabFarmer = new ClickableComponent(new Rectangle(rx, tabY, totalTabWidth, Layout.TabButtonHeight), "tab_farmer");
                 tabSpouse = new ClickableComponent(new Rectangle(0, 0, 0, 0), "tab_spouse");
-                tabPet    = new ClickableComponent(new Rectangle(0, 0, 0, 0), "tab_pet");
+                if (selectedTarget == 1) selectedTarget = 0;
+            }
+
+            if (hasPet)
+            {
+                tabPet = new ClickableComponent(new Rectangle(curTabX, tabY, tabW, Layout.TabButtonHeight), "tab_pet");
+            }
+            else
+            {
+                tabPet = new ClickableComponent(new Rectangle(0, 0, 0, 0), "tab_pet");
+                if (selectedTarget == 2) selectedTarget = 0;
             }
 
             posHeaderX = rx + Layout.PositionHeaderOffsetX;
@@ -428,6 +458,49 @@ namespace StardewPresence.Framework.Menus
                 : helper.Translation.Get("editor.layer_behind");
         }
 
+        private string GetImageFrameText()
+        {
+            string frame = config.ImageFrame ?? "none";
+            if (frame.Equals("url", StringComparison.OrdinalIgnoreCase))
+            {
+                return helper.Translation.Get("editor.image_frame_url").Default("Image Frame: URL").ToString();
+            }
+
+            string label = frame switch
+            {
+                "none" => helper.Translation.Get("editor.image_frame_none").Default("Image Frame: None").ToString(),
+                "wooden" => helper.Translation.Get("editor.image_frame_wooden").Default("Image Frame: Wooden").ToString(),
+                _ => $"{helper.Translation.Get("editor.image_frame_label").Default("Image Frame")}: {frame.Replace("wooden_", "").Replace('_', ' ')}"
+            };
+            return label;
+        }
+
+        public override void update(GameTime time)
+        {
+            base.update(time);
+            imageFrameUrlBox?.Update();
+
+            if (imageFrameUrlFocused && string.Equals(config.ImageFrame, "url", StringComparison.OrdinalIgnoreCase))
+            {
+                imageFrameUrlBox?.SelectMe();
+            }
+
+            if (imageFrameUrlBox?.Selected == true)
+            {
+                string url = imageFrameUrlBox.Text ?? "";
+                if (!string.Equals(config.ImageFrameUrl, url, StringComparison.Ordinal))
+                {
+                    config.ImageFrameUrl = url;
+                    dirty = true;
+                }
+            }
+
+            if (config.ImageFrame.Equals("url", StringComparison.OrdinalIgnoreCase))
+            {
+                dirty = true;
+            }
+        }
+
         public override void performHoverAction(int x, int y)
         {
             base.performHoverAction(x, y);
@@ -440,15 +513,6 @@ namespace StardewPresence.Framework.Menus
             dpadDown?.tryHover(x, y, 0.2f);
             dpadLeft?.tryHover(x, y, 0.2f);
             dpadRight?.tryHover(x, y, 0.2f);
-        }
-
-        public override void receiveKeyPress(Keys key)
-        {
-            base.receiveKeyPress(key);
-            if (key == Keys.F5)
-            {
-                ReloadLayoutManual();
-            }
         }
 
         public override void receiveLeftClick(int x, int y, bool playSound = true)
@@ -481,6 +545,95 @@ namespace StardewPresence.Framework.Menus
                 return;
             }
 
+            // Side buttons common to all tabs
+            if (btnBgSelect.containsPoint(x, y))
+            {
+                Game1.playSound("smallSelect");
+                Game1.activeClickableMenu = new MapBackgroundSelectorMenu(
+                    helper,
+                    monitor,
+                    config,
+                    imageGenerator,
+                    onConfigSaved: () =>
+                    {
+                        dirty = true;
+                        imageGenerator.InvalidateCache();
+                    },
+                    returnMenu: this
+                );
+                return;
+            }
+
+            if (btnImageFrame.containsPoint(x, y))
+            {
+                imageFrameUrlFocused = false;
+                int currentIndex = Array.IndexOf(ImageFrameOptions, config.ImageFrame ?? "none");
+                config.ImageFrame = ImageFrameOptions[(currentIndex + 1 + ImageFrameOptions.Length) % ImageFrameOptions.Length];
+                DoLayout();
+                dirty = true;
+                Game1.playSound("coin");
+                return;
+            }
+
+            if (string.Equals(config.ImageFrame, "url", StringComparison.OrdinalIgnoreCase) &&
+                imageFrameUrlBox != null &&
+                new Rectangle(imageFrameUrlBox.X, imageFrameUrlBox.Y, imageFrameUrlBox.Width, 44).Contains(x, y))
+            {
+                imageFrameUrlBox.Selected = false;
+                if (Game1.keyboardDispatcher?.Subscriber is TextBox)
+                {
+                    Game1.keyboardDispatcher.Subscriber = null;
+                }
+                imageFrameUrlBox.SelectMe();
+                imageFrameUrlFocused = true;
+                Game1.playSound("smallSelect");
+                return;
+            }
+
+            if (btnEmote.containsPoint(x, y))
+            {
+                imageFrameUrlFocused = false;
+                if (selectedTarget == 0)
+                    config.FarmerEmote = (config.FarmerEmote + 1) % 9;
+                else if (selectedTarget == 1)
+                    config.SpouseEmote = (config.SpouseEmote + 1) % 9;
+                else if (selectedTarget == 2)
+                    config.PetEmote = (config.PetEmote + 1) % 9;
+
+                dirty = true;
+                Game1.playSound("coin");
+                return;
+            }
+
+            if (btnSettings.containsPoint(x, y))
+            {
+                imageFrameUrlFocused = false;
+                Game1.playSound("smallSelect");
+                var gmcm = helper.ModRegistry.GetApi<Integrations.IGenericModConfigMenuApi>("spacechase0.GenericModConfigMenu");
+                if (gmcm != null)
+                {
+                    gmcm.OpenModMenu(manifest);
+                    return;
+                }
+
+                Game1.activeClickableMenu = new PresenceSettingsMenu(
+                    helper,
+                    monitor,
+                    liveConfig,
+                    onConfigSaved: () =>
+                    {
+                        dirty = true;
+                        onConfigSaved?.Invoke();
+                    },
+                    onReturnToParentMenu: () =>
+                    {
+                        Game1.activeClickableMenu = this;
+                    }
+                );
+                return;
+            }
+
+            // Targets 0, 1, 2 (Farmer, Spouse, Pet)
             if (dpadUp.containsPoint(x, y))    { Nudge(0, -step); return; }
             if (dpadDown.containsPoint(x, y))  { Nudge(0, step); return; }
             if (dpadLeft.containsPoint(x, y))  { Nudge(-step, 0); return; }
@@ -513,12 +666,16 @@ namespace StardewPresence.Framework.Menus
                 if (selectedTarget == 0)
                 {
                     config.FarmerFlip = !config.FarmerFlip;
-                    config.FarmerFacingDirection = FarmerSceneRenderer.GetFacingDirectionFromFrame(config.FarmerFrame, config.FarmerFlip);
+                    config.FarmerFacingDirection = config.FarmerFrame < 0
+                        ? (config.FarmerFlip ? (Game1.player.FacingDirection == 1 ? 3 : (Game1.player.FacingDirection == 3 ? 1 : Game1.player.FacingDirection)) : Game1.player.FacingDirection)
+                        : FarmerSceneRenderer.GetFacingDirectionFromFrame(config.FarmerFrame, config.FarmerFlip);
                 }
                 else if (selectedTarget == 1)
                 {
                     config.SpouseFlip = !config.SpouseFlip;
-                    config.SpouseFacingDirection = FarmerSceneRenderer.GetFacingDirectionFromFrame(config.SpouseFrame, config.SpouseFlip);
+                    config.SpouseFacingDirection = config.SpouseFrame < 0 && cachedSpouse.spouseFarmer != null
+                        ? (config.SpouseFlip ? (cachedSpouse.spouseFarmer.FacingDirection == 1 ? 3 : (cachedSpouse.spouseFarmer.FacingDirection == 3 ? 1 : cachedSpouse.spouseFarmer.FacingDirection)) : cachedSpouse.spouseFarmer.FacingDirection)
+                        : FarmerSceneRenderer.GetFacingDirectionFromFrame(config.SpouseFrame, config.SpouseFlip);
                 }
                 else if (selectedTarget == 2)
                     config.PetFlip = !config.PetFlip;
@@ -549,61 +706,13 @@ namespace StardewPresence.Framework.Menus
                 return;
             }
 
-            if (btnBgSelect.containsPoint(x, y))
-            {
-                Game1.playSound("smallSelect");
-                Game1.activeClickableMenu = new MapBackgroundSelectorMenu(
-                    helper,
-                    monitor,
-                    config,
-                    imageGenerator,
-                    onConfigSaved: () =>
-                    {
-                        dirty = true;
-                        imageGenerator.InvalidateCache();
-                    },
-                    returnMenu: this
-                );
-                return;
-            }
-
-            if (btnEmote.containsPoint(x, y))
-            {
-                if (selectedTarget == 0)
-                    config.FarmerEmote = (config.FarmerEmote + 1) % 9;
-                else if (selectedTarget == 1)
-                    config.SpouseEmote = (config.SpouseEmote + 1) % 9;
-                else if (selectedTarget == 2)
-                    config.PetEmote = (config.PetEmote + 1) % 9;
-
-                dirty = true;
-                Game1.playSound("coin");
-                return;
-            }
-
-            if (btnSettings.containsPoint(x, y))
-            {
-                Game1.playSound("smallSelect");
-                Game1.activeClickableMenu = new PresenceSettingsMenu(
-                    helper,
-                    monitor,
-                    liveConfig,
-                    onConfigSaved: () =>
-                    {
-                        dirty = true;
-                        onConfigSaved?.Invoke();
-                    },
-                    onReturnToParentMenu: () =>
-                    {
-                        Game1.activeClickableMenu = this;
-                    }
-                );
-                return;
-            }
-
             if (btnReset.containsPoint(x, y))
             {
+                imageFrameUrlFocused = false;
                 config.FarmerOffsetX = 0; config.FarmerOffsetY = 0; config.FarmerScale = 2.3f; config.FarmerFrame = 0; config.FarmerFlip = false;
+                config.ImageFrame = "wooden";
+                config.ImageFrameUrl = "";
+                if (imageFrameUrlBox != null) imageFrameUrlBox.Text = "";
                 config.FarmerFacingDirection = FarmerSceneRenderer.GetFacingDirectionFromFrame(0, false); config.FarmerEmote = 0;
                 config.SpouseOffsetX = -26; config.SpouseOffsetY = 0.5f; config.SpouseScale = 4; config.SpouseFrame = 0; config.SpouseFlip = false;
                 config.SpouseFacingDirection = FarmerSceneRenderer.GetFacingDirectionFromFrame(0, false); config.SpouseEmote = 0; config.CompanionType = 0;
@@ -629,8 +738,11 @@ namespace StardewPresence.Framework.Menus
 
             if (btnSave.containsPoint(x, y))
             {
+                imageFrameUrlFocused = false;
+                config.ImageFrameUrl = imageFrameUrlBox?.Text ?? config.ImageFrameUrl;
                 liveConfig.CopyFrom(config);
                 helper.WriteConfig(liveConfig);
+                ConfigFileFormatter.RestoreComments(helper.DirectoryPath);
                 imageGenerator.InvalidateCache();
                 onConfigSaved();
                 Game1.playSound("money");
@@ -660,10 +772,10 @@ namespace StardewPresence.Framework.Menus
 
         private int GetMaxFrames()
         {
-            if (selectedTarget == 0) return 120;
+            if (selectedTarget == 0) return 126;
             if (selectedTarget == 1)
             {
-                if (cachedSpouse.spouseFarmer != null) return 120;
+                if (cachedSpouse.spouseFarmer != null) return 126;
                 if (cachedSpouse.npc?.Sprite?.Texture != null)
                 {
                     int sw = cachedSpouse.npc.Sprite.SpriteWidth > 0 ? cachedSpouse.npc.Sprite.SpriteWidth : 16;
@@ -694,13 +806,18 @@ namespace StardewPresence.Framework.Menus
             int max = GetMaxFrames();
             if (selectedTarget == 0)
             {
-                config.FarmerFrame = Math.Clamp(config.FarmerFrame + dir, 0, 120);
-                config.FarmerFacingDirection = FarmerSceneRenderer.GetFacingDirectionFromFrame(config.FarmerFrame, config.FarmerFlip);
+                config.FarmerFrame = Math.Clamp(config.FarmerFrame + dir, -1, max - 1);
+                config.FarmerFacingDirection = config.FarmerFrame < 0
+                    ? Game1.player.FacingDirection
+                    : FarmerSceneRenderer.GetFacingDirectionFromFrame(config.FarmerFrame, config.FarmerFlip);
             }
             else if (selectedTarget == 1)
             {
-                config.SpouseFrame = Math.Clamp(config.SpouseFrame + dir, 0, max - 1);
-                config.SpouseFacingDirection = FarmerSceneRenderer.GetFacingDirectionFromFrame(config.SpouseFrame, config.SpouseFlip);
+                int minFrame = cachedSpouse.spouseFarmer != null ? -1 : 0;
+                config.SpouseFrame = Math.Clamp(config.SpouseFrame + dir, minFrame, max - 1);
+                config.SpouseFacingDirection = config.SpouseFrame < 0 && cachedSpouse.spouseFarmer != null
+                    ? cachedSpouse.spouseFarmer.FacingDirection
+                    : FarmerSceneRenderer.GetFacingDirectionFromFrame(config.SpouseFrame, config.SpouseFlip);
             }
             else if (selectedTarget == 2)
                 config.PetFrame = Math.Clamp(config.PetFrame + dir, 0, max - 1);
@@ -724,6 +841,13 @@ namespace StardewPresence.Framework.Menus
             string bgSelectText = helper.Translation.Get("editor.adjust_frame_btn").Default("Adjust Frame");
             DrawYellowButton(b, btnBgSelect.bounds, bgSelectText, true);
 
+            DrawYellowButton(b, btnImageFrame.bounds, GetImageFrameText(), true);
+
+            if (string.Equals(config.ImageFrame, "url", StringComparison.OrdinalIgnoreCase))
+            {
+                imageFrameUrlBox.Draw(b);
+            }
+
             DrawYellowButton(b, btnEmote.bounds, GetEmoteText(), true);
 
             string settingsText = !string.IsNullOrWhiteSpace(Layout.SettingsButtonText)
@@ -737,18 +861,14 @@ namespace StardewPresence.Framework.Menus
             if (selectedTarget == 1 && !hasSpouse) selectedTarget = 0;
             if (selectedTarget == 2 && !hasPet) selectedTarget = 0;
 
-            float curX = selectedTarget switch { 0 => config.FarmerOffsetX, 1 => config.SpouseOffsetX, 2 => config.PetOffsetX, _ => 0f };
-            float curY = selectedTarget switch { 0 => config.FarmerOffsetY, 1 => config.SpouseOffsetY, 2 => config.PetOffsetY, _ => 0f };
-            float curS = selectedTarget switch { 0 => config.FarmerScale, 1 => config.SpouseScale, 2 => config.PetScale, _ => 1f };
-            int curF   = selectedTarget switch { 0 => config.FarmerFrame, 1 => config.SpouseFrame, 2 => config.PetFrame, _ => 0 };
-            int maxF   = GetMaxFrames();
+            int tabCount = 3 + (hasSpouse ? 1 : 0) + (hasPet ? 1 : 0);
+            float tScale = Layout.TabTextScale > 0 ? Layout.TabTextScale : (tabCount >= 5 ? 0.82f : 0.92f);
 
             string fText = (!string.IsNullOrWhiteSpace(Layout.TabFarmerText) && !Layout.TabFarmerText.Equals("Player", StringComparison.OrdinalIgnoreCase))
                 ? Layout.TabFarmerText
                 : helper.Translation.Get("editor.tab_farmer").ToString();
-            float tScale = Layout.TabTextScale > 0 ? Layout.TabTextScale : 1f;
-
             DrawYellowButton(b, tabFarmer.bounds, fText, selectedTarget == 0, Layout.TabTextOffsetX, Layout.TabTextOffsetY, tScale);
+
             if (hasSpouse)
             {
                 string sText = (!string.IsNullOrWhiteSpace(Layout.TabSpouseText) && !Layout.TabSpouseText.Equals("Companion", StringComparison.OrdinalIgnoreCase))
@@ -756,6 +876,7 @@ namespace StardewPresence.Framework.Menus
                     : (cachedSpouse.npc?.displayName ?? cachedSpouse.spouseFarmer?.Name ?? helper.Translation.Get("editor.tab_spouse").ToString());
                 DrawYellowButton(b, tabSpouse.bounds, sText, selectedTarget == 1, Layout.TabTextOffsetX, Layout.TabTextOffsetY, tScale);
             }
+
             if (hasPet)
             {
                 string pText = (!string.IsNullOrWhiteSpace(Layout.TabPetText))
@@ -763,6 +884,13 @@ namespace StardewPresence.Framework.Menus
                     : helper.Translation.Get("editor.companion_pet_short").Default("Mascota").ToString();
                 DrawYellowButton(b, tabPet.bounds, pText, selectedTarget == 2, Layout.TabTextOffsetX, Layout.TabTextOffsetY, tScale);
             }
+
+            // Targets: Farmer (0), Spouse (1), Pet (2)
+            float curX = selectedTarget switch { 0 => config.FarmerOffsetX, 1 => config.SpouseOffsetX, 2 => config.PetOffsetX, _ => 0f };
+            float curY = selectedTarget switch { 0 => config.FarmerOffsetY, 1 => config.SpouseOffsetY, 2 => config.PetOffsetY, _ => 0f };
+            float curS = selectedTarget switch { 0 => config.FarmerScale, 1 => config.SpouseScale, 2 => config.PetScale, _ => 1f };
+            int curF   = selectedTarget switch { 0 => config.FarmerFrame, 1 => config.SpouseFrame, 2 => config.PetFrame, _ => 0 };
+            int maxF   = GetMaxFrames();
 
             string posHeader = (!string.IsNullOrWhiteSpace(Layout.PositionHeaderText) && !Layout.PositionHeaderText.Equals("Position:", StringComparison.OrdinalIgnoreCase))
                 ? Layout.PositionHeaderText
@@ -788,7 +916,10 @@ namespace StardewPresence.Framework.Menus
             frameMinus.draw(b);
             framePlus.draw(b);
             string frameLabel = helper.Translation.Get("editor.frame_label").Default("Frame").ToString();
-            Utility.drawTextWithShadow(b, $"{curF}/{maxF - 1} {frameLabel}", Game1.smallFont, new Vector2(frameTextX, frameTextY), Game1.textColor);
+            string frameDisplay = curF < 0
+                ? helper.Translation.Get("editor.frame_live").Default("Live (1:1)").ToString()
+                : $"{curF}/{maxF - 1}";
+            Utility.drawTextWithShadow(b, $"{frameDisplay} {frameLabel}", Game1.smallFont, new Vector2(frameTextX, frameTextY), Game1.textColor);
 
             string optHeader = (!string.IsNullOrWhiteSpace(Layout.OptionsHeaderText) && !Layout.OptionsHeaderText.Equals("Options:", StringComparison.OrdinalIgnoreCase) && !Layout.OptionsHeaderText.Equals("OPTIONS", StringComparison.OrdinalIgnoreCase))
                 ? Layout.OptionsHeaderText
@@ -898,6 +1029,10 @@ namespace StardewPresence.Framework.Menus
                     spouseNpc,
                     petNpc,
                     bg,
+                    imageGenerator.GetFrameTexture(
+                        config.ImageFrame.Equals("url", StringComparison.OrdinalIgnoreCase)
+                            ? config.ImageFrameUrl
+                            : config.ImageFrame),
                     config,
                     Layout
                 );

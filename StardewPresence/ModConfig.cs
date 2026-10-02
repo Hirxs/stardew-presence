@@ -2,6 +2,15 @@ using StardewModdingAPI;
 
 namespace StardewPresence
 {
+    internal static class InternalSettings
+    {
+        public static readonly bool EnableDynamicFarmerImage = true;
+        public const string MissingPortraitImageKey = "missing_pfp";
+        public const string CustomUploadUrl = "https://28fe32e8-stardew-presence.hirxsmc.workers.dev/api/upload";
+        public const string CustomUploadAuthHeader = "";
+        public static readonly bool CheckForUpdates = true;
+    }
+
     public class ModConfig
     {
         public string AppId { get; set; } = "1543731931512967249";
@@ -17,11 +26,9 @@ namespace StardewPresence
         public string DefaultLargeImageKey { get; set; } = "sv-app-logo";
         public string ExpandedLargeImageKey { get; set; } = "sv-app-logo-expanded";
         public string WeatherSunnyKey { get; set; } = "weather_sunny";
-        
-        // Dynamic portrait upload
-        public bool EnableDynamicFarmerImage { get; set; } = false;
-        public string MissingPortraitImageKey { get; set; } = "missing_pfp";
-        public string CustomUploadUrl { get; set; } = "";
+        public string ImageFrame { get; set; } = "wooden";
+        public string ImageFrameUrl { get; set; } = "";
+        public string CustomUploadUrl { get; set; } = "https://28fe32e8-stardew-presence.hirxsmc.workers.dev/api/upload";
         public string CustomUploadAuthHeader { get; set; } = "";
         
         // Visual Portrait Editor Customization Settings
@@ -98,6 +105,21 @@ namespace StardewPresence
         public bool EnableMultiplayerInvites { get; set; } = true;
         public bool ShowElapsedTime { get; set; } = true;
         public string TitleScreenLogo { get; set; } = "auto"; // "auto", "smapi", "vanilla", "expanded"
+        public string GameNameMode { get; set; } = "default"; // "default", "smapi", "modded", "custom"
+        public string CustomGameName { get; set; } = "Stardew Valley";
+        
+        // Custom Presence Text Lines (Details & State)
+        public string CustomLine1Format { get; set; } = "[Position] [farmname]";
+        public string CustomLine2Format { get; set; } = "";
+
+        // Discord RPC Buttons
+        public bool EnableButton1 { get; set; } = true;
+        public string Button1Label { get; set; } = "Stardew Presence";
+        public string Button1Url { get; set; } = "https://www.nexusmods.com/stardewvalley/mods/51515";
+
+        public bool EnableButton2 { get; set; } = false;
+        public string Button2Label { get; set; } = "";
+        public string Button2Url { get; set; } = "";
 
         public ModConfig Clone()
         {
@@ -157,16 +179,29 @@ namespace StardewPresence
             this.AutoUpdateCustomBackground = other.AutoUpdateCustomBackground;
             this.LastBackgroundCaptureTimestamp = other.LastBackgroundCaptureTimestamp;
 
-            this.MissingPortraitImageKey = other.MissingPortraitImageKey;
-            this.CustomUploadUrl = other.CustomUploadUrl;
-            this.CustomUploadAuthHeader = other.CustomUploadAuthHeader;
             this.ShowQiCoins = other.ShowQiCoins;
             this.ShowFarmName = other.ShowFarmName;
             this.HideNpcHouses = other.HideNpcHouses;
             this.ShowEventDetails = other.ShowEventDetails;
             this.TitleScreenLogo = other.TitleScreenLogo;
+            this.GameNameMode = other.GameNameMode;
+            this.CustomGameName = other.CustomGameName;
             this.TitleMenuDetails = other.TitleMenuDetails;
             this.TitleMenuState = other.TitleMenuState;
+            this.ShowEditorKeyNotification = other.ShowEditorKeyNotification;
+            this.ImageFrame = other.ImageFrame;
+            this.ImageFrameUrl = other.ImageFrameUrl;
+            this.CustomUploadUrl = other.CustomUploadUrl;
+            this.CustomUploadAuthHeader = other.CustomUploadAuthHeader;
+
+            this.CustomLine1Format = other.CustomLine1Format;
+            this.CustomLine2Format = other.CustomLine2Format;
+            this.EnableButton1 = other.EnableButton1;
+            this.Button1Label = other.Button1Label;
+            this.Button1Url = other.Button1Url;
+            this.EnableButton2 = other.EnableButton2;
+            this.Button2Label = other.Button2Label;
+            this.Button2Url = other.Button2Url;
         }
     }
 }

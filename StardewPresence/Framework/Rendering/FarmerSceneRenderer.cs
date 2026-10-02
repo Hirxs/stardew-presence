@@ -14,8 +14,9 @@ namespace StardewPresence.Framework.Rendering
             int frame,
             bool flip,
             int facingDirection,
-            int targetWidth = 192,
-            int targetHeight = 192)
+            out bool flippedHorizontally,
+            int targetWidth = 256,
+            int targetHeight = 256)
         {
             var previousTargets = graphicsDevice.GetRenderTargets();
 
@@ -33,6 +34,155 @@ namespace StardewPresence.Framework.Rendering
             graphicsDevice.SetRenderTarget(farmerRT);
             graphicsDevice.Clear(Color.Transparent);
 
+            FarmerSprite.AnimationFrame animFrame;
+            int curFrame;
+            Rectangle sourceRect;
+            int effectiveFacingDirection;
+            bool flipHorizontally = false;
+
+            if (frame < 0)
+            {
+                // Live mode: 1:1 capture of the in-game character's real-time state
+                curFrame = farmer.FarmerSprite?.CurrentFrame ?? 0;
+                sourceRect = farmer.FarmerSprite != null && farmer.FarmerSprite.SourceRect.Width > 0
+                    ? farmer.FarmerSprite.SourceRect
+                    : new Rectangle(curFrame * 16 % 96, curFrame * 16 / 96 * 32, 16, 32);
+
+                int liveDir = farmer.FacingDirection;
+                effectiveFacingDirection = liveDir;
+
+                if (farmer.FarmerSprite != null)
+                {
+                    var liveAnim = farmer.FarmerSprite.CurrentAnimationFrame;
+                    int liveArmOffset = liveAnim.armOffset > 0
+                        ? liveAnim.armOffset
+                        : (liveAnim.armOffset == -1 ? -1 : 6);
+
+                    animFrame = new FarmerSprite.AnimationFrame(
+                        liveAnim.frame,
+                        liveAnim.milliseconds,
+                        liveAnim.positionOffset,
+                        liveArmOffset,
+                        liveAnim.flip,
+                        liveAnim.frameStartBehavior,
+                        liveAnim.frameEndBehavior,
+                        liveAnim.xOffset
+                    );
+                }
+                else
+                {
+                    animFrame = new FarmerSprite.AnimationFrame(curFrame, 32000, 0, 6, liveDir == 3, null, null, 0);
+                }
+
+                if (flip)
+                {
+                    if (liveDir == 1)
+                    {
+                        effectiveFacingDirection = 3;
+                        animFrame.flip = true;
+                    }
+                    else if (liveDir == 3)
+                    {
+                        effectiveFacingDirection = 1;
+                        animFrame.flip = false;
+                    }
+                    else
+                    {
+                        // Front (2) or Back (0): symmetric flip across entire RenderTarget
+                        flipHorizontally = true;
+                    }
+                }
+            }
+            else
+            {
+                // Fixed frame mode (0..125) with exact 1:1 Stardew Valley animation offsets
+                curFrame = Math.Clamp(frame, 0, 125);
+                int baseDir = GetFacingDirectionFromFrame(curFrame, false);
+                effectiveFacingDirection = baseDir;
+
+                int posOffset = curFrame switch
+                {
+                    1 or 2   => -2,
+                    13 or 14 => -2,
+                    18 or 19 => -4,
+                    20 or 21 => -2,
+                    22 or 23 => -3,
+                    _ => 0
+                };
+
+                bool secondaryArm = curFrame switch
+                {
+                    25 or 27 or 28 => true,
+                    >= 30 and <= 35 => true,
+                    38 or 40 => true,
+                    45 or 46 => true,
+                    _ => false
+                };
+
+                int armOffset = curFrame switch
+                {
+                    123 or 124 or 125 => 3,
+                    _ => (secondaryArm ? 12 : 6)
+                };
+
+                bool animFlip = false;
+                if (baseDir == 1) // Right
+                {
+                    if (flip)
+                    {
+                        effectiveFacingDirection = 3;
+                        animFlip = true;
+                    }
+                    else
+                    {
+                        effectiveFacingDirection = 1;
+                        animFlip = false;
+                    }
+                }
+                else if (baseDir == 3) // Left (e.g. 123..125)
+                {
+                    if (flip)
+                    {
+                        effectiveFacingDirection = 1;
+                        animFlip = false;
+                    }
+                    else
+                    {
+                        effectiveFacingDirection = 3;
+                        animFlip = true;
+                    }
+                }
+                else // Front (2) or Back (0)
+                {
+                    effectiveFacingDirection = baseDir;
+                    animFlip = false;
+                    if (flip)
+                    {
+                        flipHorizontally = true;
+                    }
+                }
+
+                animFrame = new FarmerSprite.AnimationFrame(
+                    curFrame,
+                    32000,
+                    posOffset,
+                    armOffset,
+                    animFlip,
+                    null,
+                    null,
+                    0
+                );
+
+                sourceRect = new Rectangle(
+                    curFrame * 16 % 96,
+                    curFrame * 16 / 96 * 32,
+                    16,
+                    32
+                );
+            }
+
+            flippedHorizontally = flipHorizontally;
+
             using (var fBatch = new SpriteBatch(graphicsDevice))
             {
                 fBatch.Begin(
@@ -40,37 +190,55 @@ namespace StardewPresence.Framework.Rendering
                     BlendState.AlphaBlend,
                     SamplerState.PointClamp,
                     null,
+                    null,
+                    null,
                     null
                 );
 
                 bool oldDrawingForUI = FarmerRenderer.isDrawingForUI;
                 int oldFacingDirection = farmer.FacingDirection;
+                int oldSpriteFrame = farmer.FarmerSprite?.currentFrame ?? 0;
 
                 try
                 {
+                    // Must be true so Fashion Sense:
+                    // 1) Sorts layers with SpriteSortMode.FrontToBack based on layerDepth
+                    // 2) Applies vertical offset (4 - Scale) * 32 for custom/HD clothes (Scale < 4.0)
+                    //    so they align with the body instead of rendering 35px higher over the face
                     FarmerRenderer.isDrawingForUI = true;
-
-                    // Synchronize facing direction with frame and flip so clothes, hats, hair, and accessories
-                    // match the body orientation (FarmerRenderer and Fashion Sense rely on farmer.FacingDirection)
-                    int effectiveFacingDirection = GetFacingDirectionFromFrame(frame, flip);
                     farmer.FacingDirection = effectiveFacingDirection;
+                    if (farmer.FarmerSprite != null)
+                    {
+                        farmer.FarmerSprite.currentFrame = curFrame;
+                    }
 
-                    // Center within the 192x192 target (farmer base sprite is 64x96)
-                    Vector2 farmerPos = new Vector2(64f, 32f);
+                    // Center within the 256x256 target (farmer base sprite is 64x128 at scale 4.0)
+                    // Leaves 64px headroom for big hair/hats and 64px below for dresses/trains
+                    Vector2 farmerPos = new Vector2(96f, 64f);
 
                     farmer.FarmerRenderer.draw(
                         fBatch,
-                        farmer,
-                        Math.Max(0, frame),
+                        animFrame,
+                        curFrame,
+                        sourceRect,
                         farmerPos,
+                        Vector2.Zero,
                         0.8f,
-                        flip
+                        effectiveFacingDirection,
+                        Color.White,
+                        0f,
+                        1f,
+                        farmer
                     );
                 }
                 finally
                 {
                     FarmerRenderer.isDrawingForUI = oldDrawingForUI;
                     farmer.FacingDirection = oldFacingDirection;
+                    if (farmer.FarmerSprite != null)
+                    {
+                        farmer.FarmerSprite.currentFrame = oldSpriteFrame;
+                    }
                 }
 
                 fBatch.End();
@@ -166,19 +334,23 @@ namespace StardewPresence.Framework.Rendering
             NPC? spouseNpc,
             NPC? petNpc,
             Texture2D? bgTexture,
+            Texture2D? frameTexture,
             ModConfig config,
             UILayout layout,
             int cardWidth = 256,
             int cardHeight = 256)
         {
-            int cFrame = Math.Max(0, config.SpouseFrame);
+            int cFrame = config.SpouseFrame;
             bool cFlip = config.SpouseFlip;
 
             // Pre-render isolated textures BEFORE binding the target to prevent target detachment in DirectX
             RenderTarget2D? farmerRT = null;
+            bool farmerFlippedHorizontally = false;
             if (config.ShowFarmer)
             {
-                int effectiveDir = GetFacingDirectionFromFrame(config.FarmerFrame, config.FarmerFlip);
+                int effectiveDir = config.FarmerFrame < 0
+                    ? farmer.FacingDirection
+                    : GetFacingDirectionFromFrame(config.FarmerFrame, config.FarmerFlip);
                 config.FarmerFacingDirection = effectiveDir;
 
                 farmerRT = RenderFarmerToTexture(
@@ -186,14 +358,18 @@ namespace StardewPresence.Framework.Rendering
                     farmer,
                     config.FarmerFrame,
                     config.FarmerFlip,
-                    effectiveDir
+                    effectiveDir,
+                    out farmerFlippedHorizontally
                 );
             }
 
             RenderTarget2D? spouseRT = null;
+            bool spouseFlippedHorizontally = false;
             if (spouseFarmer != null && config.ShowCompanion && config.ShowSpouse)
             {
-                int effectiveSpouseDir = GetFacingDirectionFromFrame(cFrame, cFlip);
+                int effectiveSpouseDir = cFrame < 0
+                    ? spouseFarmer.FacingDirection
+                    : GetFacingDirectionFromFrame(cFrame, cFlip);
                 config.SpouseFacingDirection = effectiveSpouseDir;
 
                 spouseRT = RenderFarmerToTexture(
@@ -201,7 +377,8 @@ namespace StardewPresence.Framework.Rendering
                     spouseFarmer,
                     cFrame,
                     cFlip,
-                    effectiveSpouseDir
+                    effectiveSpouseDir,
+                    out spouseFlippedHorizontally
                 );
             }
 
@@ -288,11 +465,12 @@ namespace StardewPresence.Framework.Rendering
                     else if (spouseFarmer != null && spouseRT != null)
                     {
                         Vector2 spouseRTPos = new Vector2(
-                            MathF.Round(spousePos.X - 64f),
-                            MathF.Round(spousePos.Y - 32f)
+                            MathF.Round(spousePos.X - 96f),
+                            MathF.Round(spousePos.Y - 64f)
                         );
                         graphicsDevice.SamplerStates[0] = SamplerState.PointClamp;
-                        spriteBatch.Draw(spouseRT, spouseRTPos, null, Color.White, 0f, Vector2.Zero, 1f, SpriteEffects.None, 0.4f);
+                        SpriteEffects spouseEffects = spouseFlippedHorizontally ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
+                        spriteBatch.Draw(spouseRT, spouseRTPos, null, Color.White, 0f, Vector2.Zero, 1f, spouseEffects, 0.4f);
                     }
 
                     // Spouse Emote
@@ -383,11 +561,12 @@ namespace StardewPresence.Framework.Rendering
                     if (!config.ShowFarmer || farmerRT == null) return;
 
                     Vector2 farmerRTPos = new Vector2(
-                        MathF.Round(localPos.X - 64f),
-                        MathF.Round(localPos.Y - 32f)
+                        MathF.Round(localPos.X - 96f),
+                        MathF.Round(localPos.Y - 64f)
                     );
 
                     graphicsDevice.SamplerStates[0] = SamplerState.PointClamp;
+                    SpriteEffects farmerEffects = farmerFlippedHorizontally ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
                     spriteBatch.Draw(
                         farmerRT,
                         farmerRTPos,
@@ -396,7 +575,7 @@ namespace StardewPresence.Framework.Rendering
                         0f,
                         Vector2.Zero,
                         1f,
-                        SpriteEffects.None,
+                        farmerEffects,
                         0.8f
                     );
 
@@ -423,6 +602,13 @@ namespace StardewPresence.Framework.Rendering
                 if (config.PetLayerFront) drawPetAction();
 
                 spriteBatch.End();
+
+                if (frameTexture != null)
+                {
+                    spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
+                    spriteBatch.Draw(frameTexture, new Rectangle(0, 0, cardWidth, cardHeight), Color.White);
+                    spriteBatch.End();
+                }
             }
             finally
             {

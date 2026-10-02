@@ -110,6 +110,9 @@ namespace StardewPresence.Framework.Models
         [JsonPropertyName("username")]
         public string Username { get; set; } = string.Empty;
 
+        [JsonPropertyName("global_name")]
+        public string? GlobalName { get; set; }
+
         [JsonPropertyName("discriminator")]
         public string Discriminator { get; set; } = string.Empty;
 

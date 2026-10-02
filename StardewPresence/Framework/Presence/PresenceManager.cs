@@ -43,15 +43,27 @@ namespace StardewPresence.Framework.Presence
             return BuildInGameActivity();
         }
 
+        public string GetDisplayGameName()
+        {
+            return config.GameNameMode switch
+            {
+                "smapi" => "SMAPI",
+                "modded" => "Stardew Modded",
+                "custom" => string.IsNullOrWhiteSpace(config.CustomGameName) ? "Stardew Valley" : config.CustomGameName.Trim(),
+                _ => "Stardew Valley"
+            };
+        }
+
         public DiscordActivity BuildTitleScreenActivity()
         {
             int modCount = cachedModCount > 0 ? cachedModCount : helper.ModRegistry.GetAll().Count();
             string gameVersion = Game1.version;
+            string displayGameName = GetDisplayGameName();
 
             var (details, state) = GetDynamicTitleMenuStrings();
 
-            string largeText = helper.Translation.Get("title.version", new { version = gameVersion }).ToString();
-            string smallText = helper.Translation.Get("title.mods", new { count = modCount }).ToString();
+            string largeText = displayGameName;
+            string smallText = helper.Translation.Get("title.version", new { version = gameVersion }).ToString();
 
             string largeImage = config.TitleScreenLogo switch
             {
@@ -73,6 +85,7 @@ namespace StardewPresence.Framework.Presence
                     SmallImage = config.TitleSmallImageKey,
                     SmallText = smallText
                 },
+                Buttons = GetConfiguredButtons(),
                 Instance = true
             };
         }
@@ -82,16 +95,18 @@ namespace StardewPresence.Framework.Presence
             var farmer = Game1.player;
             int modCount = cachedModCount > 0 ? cachedModCount : helper.ModRegistry.GetAll().Count();
 
-            string details = GetActivityDetails();
-            string state = PlayerStatusFormatter.GetPlayerInfoState(farmer, config, helper);
+            string defaultDetails = GetActivityDetails();
+            string details = !string.IsNullOrWhiteSpace(config.CustomLine1Format)
+                ? PlayerStatusFormatter.FormatCustomLine(config.CustomLine1Format, farmer, config, helper, modCount, defaultDetails)
+                : defaultDetails;
 
-            string fallbackLogo = !string.IsNullOrWhiteSpace(config.DefaultLargeImageKey)
-                ? config.DefaultLargeImageKey
-                : (!string.IsNullOrWhiteSpace(config.TitleLargeImageKey) ? config.TitleLargeImageKey : "sv-app-logo");
+            string state = !string.IsNullOrWhiteSpace(config.CustomLine2Format)
+                ? PlayerStatusFormatter.FormatCustomLine(config.CustomLine2Format, farmer, config, helper, modCount)
+                : PlayerStatusFormatter.GetPlayerInfoState(farmer, config, helper);
 
-            string largeImageKey = (config.EnableDynamicFarmerImage && !string.IsNullOrEmpty(dynamicImageUrl))
-                ? dynamicImageUrl
-                : fallbackLogo;
+            string largeImageKey = InternalSettings.EnableDynamicFarmerImage
+                ? (!string.IsNullOrEmpty(dynamicImageUrl) ? dynamicImageUrl : InternalSettings.MissingPortraitImageKey)
+                : config.DefaultLargeImageKey;
             string largeText = PlayerStatusFormatter.GetLargeImageTooltip(farmer, config, helper);
 
             string smallImageKey = PlayerStatusFormatter.GetWeatherAssetKey(config);
@@ -148,15 +163,44 @@ namespace StardewPresence.Framework.Presence
                 },
                 Party = party,
                 Secrets = secrets,
+                Buttons = GetConfiguredButtons(),
                 Instance = true
             };
         }
 
+        private DiscordButton[]? GetConfiguredButtons()
+        {
+            List<DiscordButton>? buttons = null;
+            if (config.EnableButton1 && !string.IsNullOrWhiteSpace(config.Button1Label) && !string.IsNullOrWhiteSpace(config.Button1Url))
+            {
+                buttons ??= new List<DiscordButton>();
+                buttons.Add(new DiscordButton
+                {
+                    Label = config.Button1Label.Length > 32 ? config.Button1Label.Substring(0, 32) : config.Button1Label,
+                    Url = config.Button1Url
+                });
+            }
+
+            if (config.EnableButton2 && !string.IsNullOrWhiteSpace(config.Button2Label) && !string.IsNullOrWhiteSpace(config.Button2Url))
+            {
+                buttons ??= new List<DiscordButton>();
+                buttons.Add(new DiscordButton
+                {
+                    Label = config.Button2Label.Length > 32 ? config.Button2Label.Substring(0, 32) : config.Button2Label,
+                    Url = config.Button2Url
+                });
+            }
+
+            return buttons?.ToArray();
+        }
+
         private string GetActivityDetails()
         {
+            string gameName = GetDisplayGameName();
+
             if (!config.ShowLocation)
             {
-                return "Playing Stardew Valley";
+                return $"Playing {gameName}";
             }
 
             if (Game1.isFestival())

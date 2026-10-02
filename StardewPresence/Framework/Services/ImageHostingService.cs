@@ -19,14 +19,15 @@ namespace StardewPresence.Framework.Services
         {
             if (pngBytes == null || pngBytes.Length == 0) return null;
 
-            string uploadUrl = config.CustomUploadUrl?.Trim() ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(uploadUrl))
-            {
-                ModLogger.LogTrace(monitor, "[StardewPresence] CustomUploadUrl is empty. Dynamic portrait upload skipped.");
-                return null;
-            }
+            string uploadUrl = !string.IsNullOrWhiteSpace(config.CustomUploadUrl)
+                ? config.CustomUploadUrl
+                : InternalSettings.CustomUploadUrl;
 
-            return await cloudUploader.UploadImageAsync(pngBytes, uploadUrl, config.CustomUploadAuthHeader);
+            string authHeader = !string.IsNullOrWhiteSpace(config.CustomUploadAuthHeader)
+                ? config.CustomUploadAuthHeader
+                : InternalSettings.CustomUploadAuthHeader;
+
+            return await cloudUploader.UploadImageAsync(pngBytes, uploadUrl, authHeader);
         }
 
         public void InvalidateCache()

@@ -115,18 +115,20 @@ namespace StardewPresence.Framework.Models
         public float PetEmoteOffsetY { get; set; } = -15.0f;
         public float PetEmoteScale { get; set; } = 3.0f;
 
-        public int SettingsMenuWidth { get; set; } = 860;
-        public int SettingsMenuHeight { get; set; } = 580;
+        public int SettingsMenuWidth { get; set; } = 880;
+        public int SettingsMenuHeight { get; set; } = 640;
         public string SettingsMenuTitleText { get; set; } = "";
-        public int SettingsMenuItemHeight { get; set; } = 56;
-        public int SettingsMenuMaxVisibleItems { get; set; } = 7;
-        public int SettingsMenuListPadTop { get; set; } = 105;
-        public int SettingsMenuListPadLeft { get; set; } = 50;
-        public int SettingsMenuListPadRight { get; set; } = 50;
-        public int SettingsMenuButtonWidth { get; set; } = 180;
-        public int SettingsMenuButtonHeight { get; set; } = 44;
-        public int SettingsMenuButtonGap { get; set; } = 16;
-        public int SettingsMenuButtonsOffsetY { get; set; } = -60;
+        public int SettingsMenuItemHeight { get; set; } = 46;
+        public int SettingsMenuMaxVisibleItems { get; set; } = 8;
+        public int SettingsMenuListPadTop { get; set; } = 88;
+        public int SettingsMenuListPadLeft { get; set; } = 60;
+        public int SettingsMenuListPadRight { get; set; } = 60;
+        public int SettingsMenuButtonWidth { get; set; } = 160;
+        public int SettingsMenuButtonHeight { get; set; } = 38;
+        public int SettingsMenuButtonGap { get; set; } = 12;
+        public int SettingsMenuButtonsOffsetY { get; set; } = -58;
+
+        public int SettingsMenuControlWidth { get; set; } = 320;
 
         public int BgSelectorButtonWidth { get; set; } = 220;
         public int BgSelectorButtonHeight { get; set; } = 48;
@@ -142,14 +144,14 @@ namespace StardewPresence.Framework.Models
 
         public static UILayout Load(string directoryPath)
         {
-            string devPath = @"C:\Users\ale_y\Documents\Stardew-Presence\StardewPresence\ui_layout.json";
-            if (!File.Exists(devPath))
-            {
-                devPath = @"C:\Users\ale_y\Documents\Stardew-Presence\ui_layout.json";
-            }
+            string devPath = @"C:\Users\ale_y\Documents\Stardew-Dev\StardewPresence\StardewPresence\ui_layout.json";
             if (!File.Exists(devPath))
             {
                 devPath = @"C:\Users\ale_y\Documents\Stardew-Dev\StardewPresence\ui_layout.json";
+            }
+            if (!File.Exists(devPath))
+            {
+                devPath = @"C:\Users\ale_y\Documents\Stardew-Presence\StardewPresence\ui_layout.json";
             }
             string localPath = Path.Combine(directoryPath, "ui_layout.json");
 
@@ -202,11 +204,7 @@ namespace StardewPresence.Framework.Models
                 });
                 File.WriteAllText(filePath, json);
 
-                string devPath = @"C:\Users\ale_y\Documents\Stardew-Presence\StardewPresence\ui_layout.json";
-                if (!File.Exists(devPath))
-                {
-                    devPath = @"C:\Users\ale_y\Documents\Stardew-Presence\ui_layout.json";
-                }
+                string devPath = @"C:\Users\ale_y\Documents\Stardew-Dev\StardewPresence\StardewPresence\ui_layout.json";
                 if (!File.Exists(devPath))
                 {
                     devPath = @"C:\Users\ale_y\Documents\Stardew-Dev\StardewPresence\ui_layout.json";

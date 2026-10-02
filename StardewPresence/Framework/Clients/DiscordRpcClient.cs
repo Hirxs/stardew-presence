@@ -25,7 +25,9 @@ namespace StardewPresence.Framework.Clients
 
         public event Action<string>? OnJoin;
         public event Action<DiscordUser>? OnJoinRequest;
+        public event Action<DiscordUser>? OnReady;
 
+        public DiscordUser? CurrentUser { get; private set; }
         public bool IsConnected => isConnected;
 
         public DiscordRpcClient(string applicationId, Action<string, bool> logger)
@@ -55,7 +57,10 @@ namespace StardewPresence.Framework.Clients
 
         public void ClearActivity()
         {
-            SetActivity(null);
+            lock (syncLock)
+            {
+                pendingActivity = null;
+            }
         }
 
         public async Task RespondJoinRequestAsync(string userId, bool accept)
@@ -85,6 +90,7 @@ namespace StardewPresence.Framework.Clients
                 {
                     if (!isConnected || pipeStream == null || !pipeStream.IsConnected)
                     {
+                        lastSentActivity = null;
                         bool connected = await TryConnectAsync();
                         if (!connected)
                         {
@@ -164,6 +170,11 @@ namespace StardewPresence.Framework.Clients
                         isConnected = true;
                         logger($"[DiscordRPC] Connected to Discord IPC on {pipeName}", true);
 
+                        if (!string.IsNullOrEmpty(response))
+                        {
+                            HandleIncomingFrame(response);
+                        }
+
                         _ = Task.Run(ReadLoop);
                         return true;
                     }
@@ -198,11 +209,12 @@ namespace StardewPresence.Framework.Clients
 
         private async Task ReadLoop()
         {
-            while (isConnected && pipeStream != null && pipeStream.IsConnected && !cts.Token.IsCancellationRequested)
+            NamedPipeClientStream? stream = pipeStream;
+            while (isConnected && stream != null && stream.IsConnected && ReferenceEquals(pipeStream, stream) && !cts.Token.IsCancellationRequested)
             {
                 try
                 {
-                    var (op, response) = await ReadFrameAsync();
+                    var (op, response) = await ReadFrameAsync(stream);
                     if (op == DiscordOpCode.Close || string.IsNullOrEmpty(response))
                     {
                         break;
@@ -233,6 +245,19 @@ namespace StardewPresence.Framework.Clients
                     if (evt == "ERROR")
                     {
                         logger($"[DiscordRPC] Error frame: {json}", false);
+                    }
+                    else if (evt == "READY" && root.TryGetProperty("data", out var readyData))
+                    {
+                        if (readyData.TryGetProperty("user", out var userProp))
+                        {
+                            var user = JsonSerializer.Deserialize<DiscordUser>(userProp.GetRawText());
+                            if (user != null)
+                            {
+                                this.CurrentUser = user;
+                                logger($"[DiscordRPC] Logged in as Discord user: {user.Username} ({user.GlobalName ?? user.Username})", true);
+                                OnReady?.Invoke(user);
+                            }
+                        }
                     }
                     else if (evt == "ACTIVITY_JOIN" && root.TryGetProperty("data", out var dataProp))
                     {
@@ -285,7 +310,7 @@ namespace StardewPresence.Framework.Clients
             };
 
             string json = JsonSerializer.Serialize(payload, options);
-            logger($"[DiscordRPC] Sent SET_ACTIVITY: {activity?.Details ?? "null"} | {activity?.State ?? "null"} (Image: {activity?.Assets?.LargeImage ?? "none"})", true);
+            logger($"[DiscordRPC] Sent SET_ACTIVITY: {activity?.Details ?? "null"} | {activity?.State ?? "null"}", false);
             await SendFrameAsync(DiscordOpCode.Frame, json);
         }
 
@@ -330,9 +355,10 @@ namespace StardewPresence.Framework.Clients
             }
         }
 
-        private async Task<(DiscordOpCode, string)> ReadFrameAsync()
+        private async Task<(DiscordOpCode, string)> ReadFrameAsync(NamedPipeClientStream? streamOverride = null)
         {
-            if (pipeStream == null || !pipeStream.IsConnected)
+            NamedPipeClientStream? stream = streamOverride ?? pipeStream;
+            if (stream == null || !stream.IsConnected)
             {
                 return (DiscordOpCode.Close, string.Empty);
             }
@@ -341,7 +367,7 @@ namespace StardewPresence.Framework.Clients
             int read = 0;
             while (read < 8)
             {
-                int r = await pipeStream.ReadAsync(header, read, 8 - read, cts.Token);
+                int r = await stream.ReadAsync(header, read, 8 - read, cts.Token);
                 if (r <= 0)
                 {
                     return (DiscordOpCode.Close, string.Empty);
@@ -361,7 +387,7 @@ namespace StardewPresence.Framework.Clients
             read = 0;
             while (read < length)
             {
-                int r = await pipeStream.ReadAsync(buffer, read, length - read, cts.Token);
+                int r = await stream.ReadAsync(buffer, read, length - read, cts.Token);
                 if (r <= 0)
                 {
                     return (DiscordOpCode.Close, string.Empty);
@@ -378,35 +404,77 @@ namespace StardewPresence.Framework.Clients
             if (a == null && b == null) return true;
             if (a == null || b == null) return false;
 
-            return a.Details == b.Details &&
-                   a.State == b.State &&
-                   a.Assets?.LargeImage == b.Assets?.LargeImage &&
-                   a.Assets?.LargeText == b.Assets?.LargeText &&
-                   a.Assets?.SmallImage == b.Assets?.SmallImage &&
-                   a.Assets?.SmallText == b.Assets?.SmallText &&
-                   a.Timestamps?.Start == b.Timestamps?.Start &&
-                   a.Party?.Size?[0] == b.Party?.Size?[0] &&
-                   a.Party?.Size?[1] == b.Party?.Size?[1];
+            if (a.Details != b.Details ||
+                a.State != b.State ||
+                a.Assets?.LargeImage != b.Assets?.LargeImage ||
+                a.Assets?.LargeText != b.Assets?.LargeText ||
+                a.Assets?.SmallImage != b.Assets?.SmallImage ||
+                a.Assets?.SmallText != b.Assets?.SmallText ||
+                a.Timestamps?.Start != b.Timestamps?.Start ||
+                a.Party?.Size?[0] != b.Party?.Size?[0] ||
+                a.Party?.Size?[1] != b.Party?.Size?[1])
+            {
+                return false;
+            }
+
+            return AreButtonsEqual(a.Buttons, b.Buttons);
+        }
+
+        private static bool AreButtonsEqual(DiscordButton[]? a, DiscordButton[]? b)
+        {
+            if (a == null && b == null) return true;
+            if (a == null || b == null) return false;
+            if (a.Length != b.Length) return false;
+
+            for (int i = 0; i < a.Length; i++)
+            {
+                if (a[i].Label != b[i].Label || a[i].Url != b[i].Url)
+                    return false;
+            }
+
+            return true;
         }
 
         private void ClosePipe()
         {
             isConnected = false;
+            var stream = pipeStream;
+            pipeStream = null;
+
             try
             {
-                pipeStream?.Dispose();
+                stream?.Dispose();
             }
             catch
             {
             }
-            pipeStream = null;
         }
 
         public void Dispose()
         {
-            cts.Cancel();
-            ClosePipe();
-            cts.Dispose();
+            try
+            {
+                cts.Cancel();
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                ClosePipe();
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                cts.Dispose();
+            }
+            catch
+            {
+            }
         }
     }
 }

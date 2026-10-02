@@ -507,38 +507,8 @@ namespace StardewPresence.Framework.Menus
 
             DrawTopBanner(b);
 
-#if DEBUG
-            DrawDebugOverlay(b);
-#endif
-
             DrawBottomHUD(b);
             drawMouse(b);
-        }
-
-        private void DrawDebugOverlay(SpriteBatch b)
-        {
-            int panelX = 20;
-            int panelY = 20;
-            int panelW = 320;
-            int panelH = 160;
-
-            b.Draw(Game1.fadeToBlackRect, new Rectangle(panelX, panelY, panelW, panelH), Color.Black * 0.85f);
-            DrawSelectionBorder(b, panelX, panelY, panelW, panelH, Color.Goldenrod * 0.9f, 2);
-
-            int textX = panelX + 14;
-            int textY = panelY + 12;
-            int lineH = 23;
-
-            string locName = Game1.currentLocation?.NameOrUniqueName ?? "None";
-            int curTileX = (int)Game1.currentCursorTile.X;
-            int curTileY = (int)Game1.currentCursorTile.Y;
-
-            Utility.drawTextWithShadow(b, $"Location: {locName}", Game1.smallFont, new Vector2(textX, textY), Color.Gold);
-            Utility.drawTextWithShadow(b, $"Tile: ({currentSelectionTileX}, {currentSelectionTileY})", Game1.smallFont, new Vector2(textX, textY + lineH), Color.White);
-            Utility.drawTextWithShadow(b, $"World: ({currentSelectionTileX * 64}, {currentSelectionTileY * 64})", Game1.smallFont, new Vector2(textX, textY + lineH * 2), Color.LightGray);
-            Utility.drawTextWithShadow(b, $"Size: {gridSizeInTiles}x{gridSizeInTiles} ({gridSizeInTiles * 64}x{gridSizeInTiles * 64}px)", Game1.smallFont, new Vector2(textX, textY + lineH * 3), Color.Yellow);
-            Utility.drawTextWithShadow(b, $"Cursor Tile: ({curTileX}, {curTileY})", Game1.smallFont, new Vector2(textX, textY + lineH * 4), Color.Cyan);
-            Utility.drawTextWithShadow(b, $"Camera: ({(int)cameraPos.X}, {(int)cameraPos.Y})", Game1.smallFont, new Vector2(textX, textY + lineH * 5), Color.LightGreen);
         }
 
         private void DrawSelectionBorder(SpriteBatch b, int x, int y, int w, int h, Color color, int thickness)

@@ -18,8 +18,11 @@ namespace StardewPresence
         private DiscordRpcClient? discordClient;
         private PresenceManager? presenceManager;
         private FarmerImageGenerator? farmerImageGenerator;
+        private UpdateCheckService? updateCheckService;
         private int ticksSinceLastUpdate;
         private bool shouldShowWelcomeNotification;
+        private string? lastKnownPlayerName;
+        private string? pendingDynamicImageUrl;
 
         public override void Entry(IModHelper helper)
         {
@@ -34,24 +37,23 @@ namespace StardewPresence
             helper.Events.GameLoop.OneSecondUpdateTicked += OnOneSecondUpdateTicked;
             helper.Events.Input.ButtonPressed += OnButtonPressed;
 
-            helper.ConsoleCommands.Add("rpc_editor", "Opens the Discord RPC Portrait & Spouse Visual Editor Menu.", (cmd, args) => OpenEditorMenu());
-            helper.ConsoleCommands.Add("rpc_menu", "Opens the Discord RPC Portrait & Spouse Visual Editor Menu.", (cmd, args) => OpenEditorMenu());
-            helper.ConsoleCommands.Add("rpc_bg_select", "Opens the Discord RPC Map Background Selector to capture a farm background.", (cmd, args) => OpenMapBackgroundSelector());
-            helper.ConsoleCommands.Add("rpc_map_bg", "Opens the Discord RPC Map Background Selector to capture a farm background.", (cmd, args) => OpenMapBackgroundSelector());
-            helper.ConsoleCommands.Add("rpc_bg_refresh", "Refreshes the custom map background snapshot for the current season and day.", (cmd, args) => RefreshCustomBackground());
         }
 
         private void OnGameLaunched(object? sender, GameLaunchedEventArgs e)
         {
             int totalMods = Helper.ModRegistry.GetAll().Count();
-            ModLogger.LogInfo(Monitor, $"[StardewPresence] Detected {totalMods} active mods.");
+            ModLogger.LogTrace(Monitor, $"[StardewPresence] Detected {totalMods} active mods.");
 
             presenceManager = new PresenceManager(Helper, Monitor, config);
             presenceManager.SetModCount(totalMods);
             farmerImageGenerator = new FarmerImageGenerator(Helper, Monitor, config);
 
+            updateCheckService = new UpdateCheckService(Monitor, Helper, config);
+            updateCheckService.CheckForUpdatesAsync();
+
             InitDiscordClient();
             RegisterGenericModConfigMenu();
+            ConfigFileFormatter.RestoreComments(Helper.DirectoryPath);
 
             UpdatePresence();
         }
@@ -68,6 +70,10 @@ namespace StardewPresence
 
                 discordClient.OnJoin += OnDiscordJoin;
                 discordClient.OnJoinRequest += OnDiscordJoinRequest;
+                discordClient.OnReady += user =>
+                {
+                    ModLogger.LogTrace(Monitor, $"[StardewPresence] Ready event received from Discord client.");
+                };
             }
             catch (Exception ex)
             {
@@ -108,6 +114,12 @@ namespace StardewPresence
 
             try
             {
+                if (!config.EnablePresence)
+                {
+                    discordClient.ClearActivity();
+                    return;
+                }
+
                 var activity = presenceManager.BuildActivity();
                 discordClient.SetActivity(activity);
             }
@@ -123,8 +135,7 @@ namespace StardewPresence
             {
                 farmerImageGenerator.CheckAndUpdate(Game1.player, newUrl =>
                 {
-                    presenceManager?.SetDynamicImageUrl(newUrl);
-                    UpdatePresence();
+                    pendingDynamicImageUrl = newUrl;
                 });
             }
         }
@@ -136,8 +147,10 @@ namespace StardewPresence
                 MapBackgroundCaptureHelper.TryRefreshConfiguredSpot(this.Helper, this.Monitor, this.config, this.farmerImageGenerator, notify: false);
             }
 
+            lastKnownPlayerName = Game1.player.Name;
             UpdateFarmerImage();
             UpdatePresence();
+            updateCheckService?.CheckForUpdatesAsync();
             shouldShowWelcomeNotification = true;
         }
 
@@ -175,6 +188,14 @@ namespace StardewPresence
 
         private void OnOneSecondUpdateTicked(object? sender, OneSecondUpdateTickedEventArgs e)
         {
+            if (!string.IsNullOrWhiteSpace(pendingDynamicImageUrl))
+            {
+                string newImageUrl = pendingDynamicImageUrl;
+                pendingDynamicImageUrl = null;
+                presenceManager?.SetDynamicImageUrl(newImageUrl);
+                UpdatePresence();
+            }
+
             if (shouldShowWelcomeNotification && Context.IsWorldReady && Context.IsPlayerFree)
             {
                 shouldShowWelcomeNotification = false;
@@ -186,12 +207,15 @@ namespace StardewPresence
                         .ToString();
                     Game1.addHUDMessage(new HUDMessage(text, HUDMessage.newQuest_type));
                 }
+
+                updateCheckService?.ShowNotificationIfPending();
             }
 
             ticksSinceLastUpdate++;
             if (ticksSinceLastUpdate >= 10)
             {
                 ticksSinceLastUpdate = 0;
+                UpdateFarmerImage();
                 UpdatePresence();
             }
         }
@@ -212,7 +236,7 @@ namespace StardewPresence
                 return;
             }
 
-            Game1.activeClickableMenu = new PortraitEditorMenu(Helper, Monitor, config, farmerImageGenerator, () =>
+            Game1.activeClickableMenu = new PortraitEditorMenu(Helper, Monitor, ModManifest, config, farmerImageGenerator, () =>
             {
                 UpdateFarmerImage();
                 UpdatePresence();
@@ -269,12 +293,14 @@ namespace StardewPresence
                 {
                     config = new ModConfig();
                     Helper.WriteConfig(config);
+                    ConfigFileFormatter.RestoreComments(Helper.DirectoryPath);
                     UpdateFarmerImage();
                     UpdatePresence();
                 },
                 save: () =>
                 {
                     Helper.WriteConfig(config);
+                    ConfigFileFormatter.RestoreComments(Helper.DirectoryPath);
                     UpdateFarmerImage();
                     UpdatePresence();
                 }
@@ -284,22 +310,15 @@ namespace StardewPresence
             gmcm.AddSectionTitle(ModManifest, () => "General Settings");
             gmcm.AddBoolOption(ModManifest, () => config.EnablePresence, val => config.EnablePresence = val, () => "Enable Rich Presence", () => "Enable or disable Discord Rich Presence");
             gmcm.AddTextOption(ModManifest, () => config.AppId, val => { config.AppId = val; InitDiscordClient(); }, () => "Discord Application ID", () => "The Client ID from Discord Developer Portal");
+            gmcm.AddTextOption(ModManifest, () => config.GameNameMode, val => config.GameNameMode = val, () => "Game Name", () => "Choose the displayed game name in Discord: default, smapi, modded, custom", new[] { "default", "smapi", "modded", "custom" });
+            gmcm.AddTextOption(ModManifest, () => config.CustomGameName, val => config.CustomGameName = val, () => "Custom Game Name", () => "Used only when Game Name is set to custom.");
+            gmcm.AddTextOption(ModManifest, () => config.ImageFrame, val => { config.ImageFrame = val; UpdateFarmerImage(); UpdatePresence(); }, () => "Image Frame", () => "Frame around the generated farmer image.", new[] { "none", "wooden", "wooden_black", "wooden_blue", "wooden_gray", "wooden_green", "wooden_mythic_purple", "wooden_pink", "wooden_purple", "wooden_red", "wooden_yellow" });
 
             // Visual Portrait Editor
             gmcm.AddSectionTitle(ModManifest, () => "Visual Portrait & Spouse Editor");
             gmcm.AddKeybind(ModManifest, () => config.EditorKey, val => config.EditorKey = val, () => "Open Editor Key", () => "Press this key in-game to open the interactive visual editor menu (default F8).");
-            gmcm.AddBoolOption(ModManifest, () => config.ShowEditorKeyNotification, val => config.ShowEditorKeyNotification = val, () => "Show Startup Notification", () => "Show a HUD notification reminding you to press the editor key when loading a save.");
-            gmcm.AddBoolOption(
-                ModManifest,
-                () => config.EnableDynamicFarmerImage,
-                val => { config.EnableDynamicFarmerImage = val; UpdateFarmerImage(); UpdatePresence(); },
-                () => "Enable Dynamic Portrait (Requires Internet)",
-                () => "Uploads a rendered 2D image of your farmer to an external image hosting service so Discord can display your custom portrait. Disabled by default; requires explicit opt-in."
-            );
             gmcm.AddBoolOption(ModManifest, () => config.UseCustomMapBackground, val => { config.UseCustomMapBackground = val; UpdateFarmerImage(); UpdatePresence(); }, () => "Use Custom Map Background", () => "Use custom captured map background instead of default seasonal art");
             gmcm.AddBoolOption(ModManifest, () => config.AutoUpdateCustomBackground, val => config.AutoUpdateCustomBackground = val, () => "Auto-Update Map Background", () => "Automatically updates the custom map background on new days and seasonal changes.");
-            gmcm.AddTextOption(ModManifest, () => config.MissingPortraitImageKey, val => config.MissingPortraitImageKey = val, () => "Placeholder Image Key", () => "Discord asset key used while portrait is loading or missing (default: missing_pfp)");
-            gmcm.AddTextOption(ModManifest, () => config.CustomUploadUrl, val => config.CustomUploadUrl = val, () => "Custom Upload API URL", () => "URL of your Cloudflare Worker or custom API endpoint (e.g. https://your-worker.workers.dev/api/upload)");
 
             // Main Menu
             gmcm.AddSectionTitle(ModManifest, () => "Main Menu Presence");
@@ -308,6 +327,20 @@ namespace StardewPresence
             gmcm.AddTextOption(ModManifest, () => config.TitleMenuState, val => config.TitleMenuState = val, () => "Menu State Text", () => "Text shown on the State line when in main menu");
             gmcm.AddTextOption(ModManifest, () => config.TitleLargeImageKey, val => config.TitleLargeImageKey = val, () => "Title Large Image Key", () => "Asset key for the main menu large icon");
             gmcm.AddTextOption(ModManifest, () => config.TitleSmallImageKey, val => config.TitleSmallImageKey = val, () => "Title Small Image Key", () => "Asset key for the main menu small icon");
+
+            // Custom Presence Lines
+            gmcm.AddSectionTitle(ModManifest, () => "Presence Text Lines");
+            gmcm.AddTextOption(ModManifest, () => config.CustomLine1Format, val => { config.CustomLine1Format = val; UpdatePresence(); }, () => "Line 1 (Details) Format", () => "Use tokens: {Position}, {farmname}, {Player}, {Money}, {Date}, {Time}, {Season}, {Weather}, {Spouse}, {Pet}, {Health}, {Energy}, {Mods}");
+            gmcm.AddTextOption(ModManifest, () => config.CustomLine2Format, val => { config.CustomLine2Format = val; UpdatePresence(); }, () => "Line 2 (State) Format", () => "Leave empty for auto (Date & Money), or use tokens");
+
+            // Discord RPC Buttons
+            gmcm.AddSectionTitle(ModManifest, () => "Discord RPC Buttons");
+            gmcm.AddBoolOption(ModManifest, () => config.EnableButton1, val => { config.EnableButton1 = val; UpdatePresence(); }, () => "Enable Button 1", () => "Show clickable button 1 on your Discord profile");
+            gmcm.AddTextOption(ModManifest, () => config.Button1Label, val => { config.Button1Label = val; UpdatePresence(); }, () => "Button 1 Label", () => "Button 1 text (max 32 chars)");
+            gmcm.AddTextOption(ModManifest, () => config.Button1Url, val => { config.Button1Url = val; UpdatePresence(); }, () => "Button 1 URL", () => "Web address button 1 opens");
+            gmcm.AddBoolOption(ModManifest, () => config.EnableButton2, val => { config.EnableButton2 = val; UpdatePresence(); }, () => "Enable Button 2", () => "Show clickable button 2 on your Discord profile");
+            gmcm.AddTextOption(ModManifest, () => config.Button2Label, val => { config.Button2Label = val; UpdatePresence(); }, () => "Button 2 Label", () => "Button 2 text (max 32 chars)");
+            gmcm.AddTextOption(ModManifest, () => config.Button2Url, val => { config.Button2Url = val; UpdatePresence(); }, () => "Button 2 URL", () => "Web address button 2 opens");
 
             // In-Game Details
             gmcm.AddSectionTitle(ModManifest, () => "In-Game Toggles & Privacy");
@@ -322,6 +355,16 @@ namespace StardewPresence
             gmcm.AddBoolOption(ModManifest, () => config.ShowMultiplayer, val => config.ShowMultiplayer = val, () => "Show Multiplayer Status", () => "Show party size in multiplayer sessions");
             gmcm.AddBoolOption(ModManifest, () => config.ShowModCount, val => config.ShowModCount = val, () => "Show Mod Count", () => "Display active mod count in tooltips");
             gmcm.AddBoolOption(ModManifest, () => config.ShowElapsedTime, val => config.ShowElapsedTime = val, () => "Show Elapsed Time", () => "Display time elapsed since game launch");
+
+            // Notifications & Updates
+            gmcm.AddSectionTitle(ModManifest, () => "Notifications & Updates");
+            gmcm.AddBoolOption(
+                ModManifest,
+                () => config.ShowEditorKeyNotification,
+                val => config.ShowEditorKeyNotification = val,
+                () => $"Show [{config.EditorKey}] Startup Notification",
+                () => $"Show the HUD notification on save load reminding you to press [{config.EditorKey}]. When disabled, this notification is hidden, but update notifications remain active."
+            );
         }
 
         protected override void Dispose(bool disposing)

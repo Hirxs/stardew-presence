@@ -61,7 +61,7 @@ namespace StardewPresence.Framework.Services
                     }
                 }
 
-                request.Headers.UserAgent.ParseAdd("StardewPresence/0.2.0");
+                request.Headers.UserAgent.ParseAdd("StardewPresence/3.0.0");
 
                 using var content = new ByteArrayContent(pngBytes);
                 content.Headers.ContentType = new MediaTypeHeaderValue("image/png");
@@ -82,7 +82,7 @@ namespace StardewPresence.Framework.Services
                 {
                     this.lastImageHash = currentHash;
                     this.cachedUploadedUrl = trimmedBody;
-                    ModLogger.LogInfo(this.monitor, $"[ImageUploader] Image uploaded: {trimmedBody}");
+                    ModLogger.LogTrace(this.monitor, $"[ImageUploader] Image uploaded: {trimmedBody}");
                     return trimmedBody;
                 }
 
@@ -94,7 +94,7 @@ namespace StardewPresence.Framework.Services
                     {
                         this.lastImageHash = currentHash;
                         this.cachedUploadedUrl = uploadedUrl;
-                        ModLogger.LogInfo(this.monitor, $"[ImageUploader] Image uploaded: {uploadedUrl}");
+                        ModLogger.LogTrace(this.monitor, $"[ImageUploader] Image uploaded: {uploadedUrl}");
                         return uploadedUrl;
                     }
                 }
@@ -105,7 +105,7 @@ namespace StardewPresence.Framework.Services
                     {
                         this.lastImageHash = currentHash;
                         this.cachedUploadedUrl = uploadedUrl;
-                        ModLogger.LogInfo(this.monitor, $"[ImageUploader] Image uploaded: {uploadedUrl}");
+                        ModLogger.LogTrace(this.monitor, $"[ImageUploader] Image uploaded: {uploadedUrl}");
                         return uploadedUrl;
                     }
                 }
